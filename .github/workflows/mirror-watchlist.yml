@@ -20,7 +20,7 @@ jobs:
       - name: Copy to docs
         run: |
           mkdir -p docs
-          cp combined_watchlist.csv docs/combined_watchlist.csv
+          cp combined_watchlist.csv docs/combined_watchlist.txt
 
       - name: Commit & push if changed
         uses: EndBug/add-and-commit@v9
