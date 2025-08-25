@@ -1,0 +1,47 @@
+name: Build Finviz Watchlist
+
+on:
+  schedule:
+    # Weekdays at 21:15 UTC (after US market close). Adjust if you like.
+    - cron: '15 21 * * 1-5'
+  workflow_dispatch: {}   # allows manual run
+  push:
+    paths:
+      - finviz_watchlist_builder.py
+      - .github/workflows/watchlist.yml
+      - requirements.txt
+
+permissions:
+  contents: write   # allow committing the updated CSVs
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        run: python finviz_watchlist_builder.py
+
+      - name: Commit changes (if any)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add oversold.csv overbought.csv pullbacks.csv breakouts.csv combined_watchlist.csv || true
+            git commit -m "Auto-update watchlists"
+            git push
+          else
+            echo "No changes to commit."
+          fi
