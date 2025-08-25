@@ -1,0 +1,76 @@
+---
+layout: none
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ site.title }} — Directory</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; margin: 2rem; background:#fafafa; }
+    h1 { margin: 0 0 1rem; }
+    .note { color:#666; margin-bottom:1.25rem; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    th, td { padding: .6rem .75rem; border-bottom: 1px solid #eee; text-align: left; }
+    th { font-weight: 600; }
+    a { color: #0366d6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background:#f2f2f2; padding: .1rem .3rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>{{ site.title }} — Directory</h1>
+  <div class="note">Auto‑listed via Jekyll (GitHub Pages). Add files to the repo and they’ll appear here on the next Pages build.</div>
+
+  {% comment %}
+    Collect static files that Jekyll will publish.
+    Filter out the index itself, and optionally only show certain extensions.
+  {% endcomment %}
+  {% assign items = site.static_files | sort: "path" %}
+  {% assign shown = "" %}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Path</th>
+        <th>Type</th>
+        <th>Last Modified</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for f in items %}
+      {% assign name = f.path | split: "/" | last %}
+      {% if name == "index.html" %}
+        {% continue %}
+      {% endif %}
+
+      {%- comment -%}
+        Show typical data files by default; add/remove as you like.
+      {%- endcomment -%}
+      {% assign ext = f.extname | downcase %}
+      {% if ext == ".csv" or ext == ".json" or ext == ".txt" or ext == ".parquet" or ext == ".xlsx" or ext == ".html" %}
+        <tr>
+          <td><a href="{{ f.path | uri_escape }}">{{ name }}</a></td>
+          <td><code>{{ f.path }}</code></td>
+          <td>{{ ext | remove: "." | upcase }}</td>
+          <td>
+            {%- if f.modified_time -%}
+              {{ f.modified_time | date: "%Y-%m-%d %H:%M %Z" }}
+            {%- else -%}
+              —
+            {%- endif -%}
+          </td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="note" style="margin-top:1rem;">
+    If a file doesn’t show up, ensure it’s committed to the same branch configured for Pages and not ignored by Jekyll. You can whitelist files in <code>_config.yml</code> under <code>include:</code>.
+  </p>
+</body>
+</html>
