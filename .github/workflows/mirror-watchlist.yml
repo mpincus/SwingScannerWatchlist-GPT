@@ -4,21 +4,27 @@ on:
     branches: [ main ]
     paths:
       - combined_watchlist.csv
-  workflow_dispatch:   # 👈 this lets you run it manually
+  workflow_dispatch:
+
+permissions:
+  contents: write  # ✅ allows the workflow to push
+
 jobs:
   mirror:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Copy to docs
         run: |
           mkdir -p docs
           cp combined_watchlist.csv docs/combined_watchlist.csv
-      - name: Commit mirror (if changed)
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add docs/combined_watchlist.csv
-          git diff --quiet && echo "No changes" || git commit -m "Mirror CSV to docs"
-      - name: Push
-        run: git push
+
+      - name: Commit & push if changed
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "docs/combined_watchlist.csv"
+          message: "Mirror CSV to docs"
+          default_author: github_actions
