@@ -1,4 +1,7 @@
-# _config.yml
+# _config.yml (repo root)
+url: "https://mpincus.github.io"            # your GitHub Pages domain
+baseurl: "/SwingScannerWatchlist-GPT"       # repo name prefixed with a slash
 include:
-  - combined_watchlist.csv
-  - docs/
+  - watchlist.csv
+  - combined_watchlist.csv                  # add any others you want published
+# (make sure you don't also "exclude" these anywhere)
