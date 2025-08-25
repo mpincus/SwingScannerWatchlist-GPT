@@ -1,6 +1,7 @@
 Ticker,List
 BJ,oversold
 USA,oversold
+CAVA,oversold
 GGAL,oversold
 INTU,oversold
 IT,oversold
@@ -18,13 +19,11 @@ CHRW,overbought
 CVS,overbought
 DAY,overbought
 DINO,overbought
-EBAY,overbought
 EXPE,overbought
 FAST,overbought
 FUTU,overbought
 GGLL,overbought
 GH,overbought
-GLNG,overbought
 GLW,overbought
 GM,overbought
 GMS,overbought
@@ -35,7 +34,6 @@ HUM,overbought
 INSM,overbought
 JNJ,overbought
 LDOS,overbought
-LITE,overbought
 LNC,overbought
 LVS,overbought
 LYV,overbought
@@ -48,7 +46,7 @@ SE,overbought
 SVXY,overbought
 TIGO,overbought
 TOL,overbought
-WDC,overbought
+VTIP,overbought
 WNS,overbought
 INDIA,overbought
 ZBH,overbought
@@ -72,4 +70,5 @@ STX,breakouts
 SYF,breakouts
 UBS,breakouts
 VWO,breakouts
+WDC,breakouts
 WYNN,breakouts
