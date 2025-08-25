@@ -1,6 +1,0 @@
-title: SwingScanner Watchlist
-theme: minima   # optional; any Pages-supported theme works
-# Ensure static files (like CSVs) are copied
-include:
-  - combined_watchlist.csv
-  # add more files or folders here if needed
