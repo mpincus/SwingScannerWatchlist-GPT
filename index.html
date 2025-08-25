@@ -1,18 +1,55 @@
 ---
 layout: none
 ---
+
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>Directory</title></head>
+<head>
+  <meta charset="utf-8" />
+  <title>Directory</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: ui-monospace, Menlo, Consolas, monospace; margin: 2rem; }
+    h1 { margin: 0 0 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: .6rem .8rem; border-bottom: 1px solid #eee; text-align: left; }
+    a { text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .muted { color: #666; }
+  </style>
+</head>
 <body>
   <h1>Files</h1>
-  <ul>
-  {%- for f in site.static_files -%}
-    {%- assign name = f.path | split: "/" | last -%}
-    {%- if name != "index.html" and name != ".nojekyll" -%}
-      <li><a href="{{ f.path | relative_url }}">{{ name }}</a></li>
-    {%- endif -%}
-  {%- endfor -%}
-  </ul>
+  <p class="muted">Links use <code>absolute_url</code>. Ensure <code>url</code> and <code>baseurl</code> are set in <code>_config.yml</code>.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Path</th>
+        <th>Type</th>
+        <th>Last Modified</th>
+      </tr>
+    </thead>
+    <tbody>
+    {%- for f in site.static_files -%}
+      {%- assign name = f.path | split: "/" | last -%}
+      {%- if name != "index.html" and name != ".nojekyll" -%}
+        <tr>
+          <td><a href="{{ f.path | absolute_url }}">{{ name }}</a></td>
+          <td><code>{{ f.path }}</code></td>
+          <td>{{ f.extname | remove: "." | upcase }}</td>
+          <td>
+            {%- if f.modified_time -%}
+              {{ f.modified_time | date: "%Y-%m-%d %H:%M %Z" }}
+            {%- else -%}
+              —
+            {%- endif -%}
+          </td>
+        </tr>
+      {%- endif -%}
+    {%- endfor -%}
+    </tbody>
+  </table>
 </body>
 </html>
