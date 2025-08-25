@@ -1,3 +1,4 @@
 # _config.yml
 include:
   - combined_watchlist.csv
+  - docs/
