@@ -3,27 +3,16 @@ layout: none
 ---
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Directory</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: ui-monospace, Menlo, Consolas, monospace; margin: 2rem; }
-    ul { list-style: none; padding: 0; }
-    li { margin: .4rem 0; }
-    a { text-decoration: none; }
-    a:hover { text-decoration: underline; }
-  </style>
-</head>
+<head><meta charset="utf-8"><title>Directory</title></head>
 <body>
   <h1>Files</h1>
   <ul>
-  {%- for f in site.static_files %}
-    {%- assign name = f.path | split: "/" | last %}
-    {%- if name != "index.html" and name != ".nojekyll" %}
+  {%- for f in site.static_files -%}
+    {%- assign name = f.path | split: "/" | last -%}
+    {%- if name != "index.html" and name != ".nojekyll" -%}
       <li><a href="{{ f.path | relative_url }}">{{ name }}</a></li>
-    {%- endif %}
-  {%- endfor %}
+    {%- endif -%}
+  {%- endfor -%}
   </ul>
 </body>
 </html>
