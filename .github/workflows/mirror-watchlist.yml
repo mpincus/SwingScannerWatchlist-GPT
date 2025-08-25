@@ -1,10 +1,10 @@
-# .github/workflows/mirror-watchlist.yml
 name: Mirror watchlist to docs
 on:
   push:
     branches: [ main ]
     paths:
       - combined_watchlist.csv
+  workflow_dispatch:   # 👈 this lets you run it manually
 jobs:
   mirror:
     runs-on: ubuntu-latest
