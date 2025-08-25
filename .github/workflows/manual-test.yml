@@ -1,0 +1,7 @@
+name: Manual Test
+on: { workflow_dispatch: {} }
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Event=$GITHUB_EVENT_NAME Ref=$GITHUB_REF Sha=$GITHUB_SHA"
