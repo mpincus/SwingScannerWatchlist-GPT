@@ -47,7 +47,8 @@ SCREENS: Dict[str, str] = {
     "pullbacks": f"https://finviz.com/screener.ashx?{BASE},ta_perf_4w10o,ta_sma50_pb",
 
     # Breakouts/near-high continuation
-  "breakouts": f"https://finviz.com/screener.ashx?v=111&f=cap_largeover,sh_opt_option,sh_price_o10,sh_avgvol_o2000,geo_usa,ta_highlow52w_a2,ta_sma50_pa,ta_sma200_pa,ta_perf_4w10o",
+  "breakouts": f"https://finviz.com/screener.ashx?v=111&f=cap_largeover,sh_opt_option,sh_price_o10,sh_avgvol_o2000,geo_usa,ta_highlow52w_a2,ta_sma50_pa,ta_sma200_pa,ta_perf_4w10o"
+}
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
