@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build RSI-extremes watchlist (US only, ETFs allowed) and write:
-- combined_watchlist.csv  (columns: Ticker,List where List in {oversold, overbought})
-- docs/combined_watchlist.txt  (tickers only)
-Also writes diagnostics:
-- extremes.csv, extremes.txt, missed_tickers.txt
-Creates empty pullbacks.csv and breakouts.csv for workflow compatibility.
+Build RSI-extremes watchlist (US only, ETFs allowed).
 
-Rules: RSI(14) long if RSI <= 30, short if RSI >= 70.
+Outputs
+- combined_watchlist.csv  (Ticker,List where List in {oversold, overbought})
+- docs/combined_watchlist.txt  (tickers only)
+- extremes.csv, extremes.txt, missed_tickers.txt
+- pullbacks.csv, breakouts.csv (empty stubs)
+
+Rule: long if RSI(14) <= 30, short if RSI(14) >= 70.
 Never hard-fail CI; always emit artifacts.
 """
 
@@ -23,10 +24,11 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-# ---- Config ----
+# -------- Config --------
 RSI_PERIOD = 14
 OVERSOLD = 30.0
 OVERBOUGHT = 70.0
+
 CHUNK = int(os.getenv("CHUNK", "120"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 RETRY_SLEEP = int(os.getenv("RETRY_SLEEP", "3"))
@@ -38,7 +40,7 @@ DOCS = ROOT / "docs"
 DOCS.mkdir(exist_ok=True)
 ASOF = pd.Timestamp.utcnow().tz_localize(None).date().isoformat()
 
-# ---- Helpers ----
+# -------- Helpers --------
 def clean_symbol(t: str) -> str:
     return (
         str(t).strip().upper()
@@ -71,6 +73,7 @@ def load_universe_us() -> List[str]:
     # Dow 30
     dj = read_html_table("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average", match="Symbol|Ticker")
     dj_col = "Symbol" if "Symbol" in dj.columns else ("Ticker" if "Ticker" in dj.columns else dj.columns[0])
+
     syms = pd.concat([sp[sp_col], nd[nd_col], dj[dj_col]], ignore_index=True)
     return sorted({clean_symbol(x) for x in syms.dropna().astype(str)})
 
@@ -103,9 +106,9 @@ def dl_batch(symbols: List[str]) -> pd.DataFrame:
             time.sleep(RETRY_SLEEP * tries)
     raise RuntimeError(f"yfinance batch failed: {last}")
 
-# ---- Scan ----
+# -------- Scan --------
 def scan_extremes(symbols: List[str]) -> Tuple[pd.DataFrame, List[str]]:
-    rows = []
+    rows: List[dict] = []
     misses: List[str] = []
     need = RSI_PERIOD + 1
 
@@ -122,7 +125,7 @@ def scan_extremes(symbols: List[str]) -> Tuple[pd.DataFrame, List[str]]:
             for sym in names:
                 try:
                     df = data[sym].dropna()
-                    if df.empty or len(df) < need:  # not enough history
+                    if df.empty or len(df) < need:
                         continue
                     rv = rsi(df["Close"]).iloc[-1]
                     if np.isnan(rv) or (OVERSOLD < rv < OVERBOUGHT):
@@ -138,7 +141,6 @@ def scan_extremes(symbols: List[str]) -> Tuple[pd.DataFrame, List[str]]:
                 except Exception:
                     misses.append(sym)
         else:
-            # salvage per ticker
             for sym in batch:
                 try:
                     df = yf.download(sym, period="12mo", interval="1d", auto_adjust=False, progress=False)
@@ -162,10 +164,39 @@ def scan_extremes(symbols: List[str]) -> Tuple[pd.DataFrame, List[str]]:
     out = out.dropna(subset=["RSI14"]).sort_values(["Side", "Ticker"]).reset_index(drop=True)
     return out, sorted(set(misses))
 
-# ---- Outputs ----
+# -------- Outputs --------
 def write_outputs(df: pd.DataFrame, misses: List[str]) -> None:
     combined = df.assign(
         List=np.where(df["Side"].str.lower() == "long", "oversold", "overbought")
     )[["Ticker", "List"]]
+
     combined.to_csv(ROOT / "combined_watchlist.csv", index=False)
-    combined["Ticker
+    combined["Ticker"].to_csv(DOCS / "combined_watchlist.txt", index=False, header=False)
+
+    df.to_csv(ROOT / "extremes.csv", index=False)
+    df["Ticker"].to_csv(ROOT / "extremes.txt", index=False, header=False)
+    pd.Series(misses, dtype=str).to_csv(ROOT / "missed_tickers.txt", index=False, header=False)
+
+    pd.DataFrame({"Ticker": []}).to_csv(ROOT / "pullbacks.csv", index=False)
+    pd.DataFrame({"Ticker": []}).to_csv(ROOT / "breakouts.csv", index=False)
+
+# -------- Main --------
+def main() -> int:
+    try:
+        universe = load_universe_us()
+        df, misses = scan_extremes(universe)
+        write_outputs(df, misses)
+        print(f"Universe: {len(universe)} | Extremes: {len(df)} | Misses: {len(misses)}")
+        return 0
+    except Exception as e:
+        try:
+            empty = pd.DataFrame(columns=["Ticker", "RSI14", "Side", "Close", "AsOf"])
+            write_outputs(empty, [str(e)])
+        except Exception:
+            pass
+        print(f"WARN: {e}")
+        return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+```0
