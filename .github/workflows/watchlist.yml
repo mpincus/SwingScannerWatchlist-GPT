@@ -3,6 +3,9 @@ name: Build Finviz Watchlist
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -11,9 +14,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install numpy pandas yfinance requests lxml
+          pip install -r requirements.txt || pip install "numpy>=1.24" "pandas>=2.0" "yfinance>=0.2.40" requests lxml
+
       - name: Run scraper
-        run: python finviz_watchlist_builder.py
+        run: |
+          mkdir -p docs
+          python finviz_watchlist_builder.py
+
+      - name: Assert and show outputs
+        run: |
+          set -e
+          ls -la
+          test -f extremes.csv
+          test -f extremes.txt
+          head -n 5 extremes.csv || true
+
+      - name: Commit changes (if any)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Update watchlists [skip ci]"
+          git push
