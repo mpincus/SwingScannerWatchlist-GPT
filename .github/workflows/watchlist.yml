@@ -1,48 +1,19 @@
-name: Build Watchlist
+name: Build Finviz Watchlist
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 20 * * 1-5"  # 20:15 UTC on weekdays
-
-permissions:
-  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || pip install numpy pandas yfinance requests lxml
-
-      - name: Run builder
-        run: |
-          mkdir -p docs
-          python finviz_watchlist_builder.py
-
-      - name: Assert outputs
-        run: |
-          set -e
-          test -f combined_watchlist.csv
-          test -f docs/combined_watchlist.txt
-          head -n 5 combined_watchlist.csv || true
-
-      - name: Commit changes (if any)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes"
-            exit 0
-          fi
-          git commit -m "Update combined_watchlist [skip ci]"
-          git push
+          pip install numpy pandas yfinance requests lxml
+      - name: Run scraper
+        run: python finviz_watchlist_builder.py
