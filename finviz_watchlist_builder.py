@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Build RSI-extremes watchlist (US only, ETFs allowed).
+RSI-extremes watchlist (US only, ETFs allowed).
 
 Outputs
 - combined_watchlist.csv  (Ticker,List where List in {oversold, overbought})
 - docs/combined_watchlist.txt  (tickers only)
+Also writes diagnostics:
 - extremes.csv, extremes.txt, missed_tickers.txt
-- pullbacks.csv, breakouts.csv (empty stubs)
+Creates empty pullbacks.csv and breakouts.csv for compatibility.
 
 Rule: long if RSI(14) <= 30, short if RSI(14) >= 70.
 Never hard-fail CI; always emit artifacts.
@@ -199,4 +200,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-```0
