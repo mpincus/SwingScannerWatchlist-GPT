@@ -1,56 +1,37 @@
 name: Build Finviz Watchlist
 
 on:
+  workflow_dispatch:
   schedule:
-    # Weekdays at 21:15 UTC (after US market close). Adjust if you like.
-    - cron: '15 21 * * 1-5'
-  workflow_dispatch: {}   # allows manual run
-  push:
-    paths:
-      - finviz_watchlist_builder.py
-      - .github/workflows/watchlist.yml
-      - requirements.txt
-
-permissions:
-  contents: write   # allow committing the updated CSVs
+    - cron: "15 20 * * 1-5"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          persist-credentials: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
+          python-version: "3.11"
       - name: Install deps
-        run: pip install -r requirements.txt
-
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || pip install numpy pandas yfinance requests lxml
+          python - <<'PY'
+import numpy, pandas, yfinance, requests, lxml
+print("deps ok")
+PY
       - name: Run scraper
         run: python finviz_watchlist_builder.py
-
-      - name: Commit changes (if any)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain)" ]; then
-            git add oversold.csv overbought.csv pullbacks.csv breakouts.csv combined_watchlist.csv || true
-            git commit -m "Auto-update watchlists"
-            git push
-          else
-            echo "No changes to commit."
-          fi
-- uses: actions/setup-python@v5
-  with:
-    python-version: '3.11'
-
-- name: Install deps
-  run: |
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    python -c "import numpy, pandas, yfinance, lxml, requests; print('deps ok')"
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: watchlist-outputs
+          path: |
+            extremes.csv
+            extremes.txt
+            missed_tickers.txt
+            combined_watchlist.csv
+            docs/combined_watchlist.txt
