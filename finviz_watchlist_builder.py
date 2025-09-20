@@ -41,7 +41,7 @@ SCREENS: Dict[str, str] = {
     "oversold":  f"https://finviz.com/screener.ashx?{BASE},ta_rsi_os30",
 
     # True overbought candidates
-    "overbought": f"https://finviz.com/screener.ashx?{BASE},ta_rsi_ob70"
+    "overbought": f"https://finviz.com/screener.ashx?{BASE},ta_rsi_ob70",
 }
 
 HEADERS = {
@@ -113,7 +113,7 @@ def write_txt(path: str, rows: List[dict]):
 
 def main():
     all_rows = []
-    order = ["oversold", "overbought"]
+    order = ["oversold", "overbought", "pullbacks", "breakouts"]
 
     for name in order:
         url = SCREENS[name]
@@ -137,7 +137,9 @@ def main():
     write_txt("combined_watchlist.txt", deduped)
 
     print(f"Done. Oversold:{len([r for r in deduped if r['List']=='oversold'])} | "
-          f"Overbought:{len([r for r in deduped if r['List']=='overbought'])} | ")
+          f"Overbought:{len([r for r in deduped if r['List']=='overbought'])} | "
+          f"Pullbacks:{len([r for r in deduped if r['List']=='pullbacks'])} | "
+          f"Breakouts:{len([r for r in deduped if r['List']=='breakouts'])}")
     print(f"Combined (de-duped): {len(deduped)} tickers")
 
 if __name__ == "__main__":
