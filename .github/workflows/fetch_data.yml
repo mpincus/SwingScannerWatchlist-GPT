@@ -34,6 +34,19 @@ jobs:
           commit_message: "Update OHLCV data CSVs"
           file_pattern: data/*.csv
 
+      - name: Copy combined.csv into docs for GitHub Pages
+        run: |
+          mkdir -p docs
+          cp data/combined.csv docs/combined.csv
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update OHLCV data CSVs"
+          file_pattern: |
+            data/*.csv
+            docs/combined.csv
+
       - name: Upload combined.csv artifact
         uses: actions/upload-artifact@v4
         with:
