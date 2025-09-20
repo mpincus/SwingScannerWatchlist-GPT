@@ -42,6 +42,12 @@ SCREENS: Dict[str, str] = {
 
     # True overbought candidates
     "overbought": f"https://finviz.com/screener.ashx?{BASE},ta_rsi_ob70",
+
+    # Pullbacks in strong trends (up >10% in 4w, pulling back toward 50-SMA)
+    "pullbacks": f"https://finviz.com/screener.ashx?{BASE},ta_perf_4w10o,ta_sma50_pb",
+
+    # Breakouts/near-high continuation
+  "breakouts": f"https://finviz.com/screener.ashx?v=111&f=cap_largeover,sh_opt_option,sh_price_o10,sh_avgvol_o2000,geo_usa,ta_highlow52w_a2,ta_sma50_pa,ta_sma200_pa,ta_perf_4w10o"
 }
 
 HEADERS = {
