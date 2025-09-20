@@ -137,9 +137,7 @@ def main():
     write_txt("combined_watchlist.txt", deduped)
 
     print(f"Done. Oversold:{len([r for r in deduped if r['List']=='oversold'])} | "
-          f"Overbought:{len([r for r in deduped if r['List']=='overbought'])} | "
-          f"Pullbacks:{len([r for r in deduped if r['List']=='pullbacks'])} | "
-          f"Breakouts:{len([r for r in deduped if r['List']=='breakouts'])}")
+          f"Overbought:{len([r for r in deduped if r['List']=='overbought'])} | ")
     print(f"Combined (de-duped): {len(deduped)} tickers")
 
 if __name__ == "__main__":
