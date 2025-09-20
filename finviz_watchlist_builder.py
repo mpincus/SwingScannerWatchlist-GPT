@@ -1,152 +1,241 @@
 #!/usr/bin/env python3
 """
-Builds a tighter Finviz-based watchlist using refined, liquid filters.
+Build extremes.csv (RSI-extremes only) from the FULL US watchlist.
+- Input (optional): combined_watchlist.csv with column 'Ticker'
+  If missing, auto-build US universe = S&P 500 + Nasdaq-100 + Dow 30.
+- Output:
+  1) extremes.csv  columns: Ticker,RSI14,Side,Close,AsOf,ATR20,MA50,MA200
+  2) extremes.txt  one ticker per line
+  3) missed_tickers.txt  any symbols that failed to fetch
 
-Outputs:
-  - oversold.csv, overbought.csv, pullbacks.csv, breakouts.csv
-  - combined_watchlist.csv  (columns: Ticker,List)
-  - combined_watchlist.txt  (same list in plain text for copy/paste)
-
-Notes:
-- Respects Finviz by paging gently with small delays.
-- De-dupes by first appearance order (oversold → overbought → pullbacks → breakouts).
-- You can tweak filters in the SCREENS dict below.
+US only. ETFs allowed. No sampling.
 """
 
-import time, csv, re, sys
-import requests
-from bs4 import BeautifulSoup
+import os
+import sys
+import time
+import pathlib
 from typing import List, Dict
 
-# -------------
-# Refined filters
-# -------------
-# Common filter fragments (Finviz screener URL params):
-#  - cap_midover        : Market cap ≥ $2B (mid/large caps → better options liquidity)
-#  - sh_opt_option      : Optionable
-#  - sh_price_o10       : Price > $10 (avoid pennies/low tiers)
-#  - sh_avgvol_o1000    : Avg volume > 1M shares
-#  - geo_usa            : U.S.-listed (avoid ADR liquidity quirks). Remove if you want global
-#  - ta_rsi_os30        : RSI ≤ 30 (oversold)
-#  - ta_rsi_ob70        : RSI ≥ 70 (overbought)
-#  - ta_highlow52w_a5   : Within 5% of 52-week high (breakout proximity)
-#  - ta_sma50_pa        : Price above 50 SMA (trend confirmation)
-#  - ta_sma50_pb        : Price near/pulling back to 50 SMA
-#  - ta_perf_4w10o      : 4-week perf > +10% (momentum filter for pullbacks)
+import numpy as np
+import pandas as pd
+import requests
+import yfinance as yf
 
-BASE = "v=111&f=cap_midover,sh_opt_option,sh_price_o10,sh_avgvol_o1000,geo_usa"
+# ---------------- Config ----------------
+RSI_PERIOD = 14
+ATR_PERIOD = 20
+MA1, MA2 = 50, 200
+OVERSOLD = 30.0
+OVERBOUGHT = 70.0
 
-SCREENS: Dict[str, str] = {
-    # True oversold candidates
-    "oversold":  f"https://finviz.com/screener.ashx?{BASE},ta_rsi_os30",
+CHUNK = int(os.getenv("CHUNK", "120"))     # symbols per yfinance call
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+RETRY_SLEEP = int(os.getenv("RETRY_SLEEP", "3"))
 
-    # True overbought candidates
-    "overbought": f"https://finviz.com/screener.ashx?{BASE},ta_rsi_ob70",
+ROOT = pathlib.Path(".").resolve()
+ASOF = pd.Timestamp.utcnow().tz_convert("UTC").tz_localize(None).date().isoformat()
 
-    # Pullbacks in strong trends (up >10% in 4w, pulling back toward 50-SMA)
-    "pullbacks": f"https://finviz.com/screener.ashx?{BASE},ta_perf_4w10o,ta_sma50_pb",
+# -------------- Helpers ---------------
 
-    # Breakouts/near-high continuation
-  "breakouts": f"https://finviz.com/screener.ashx?v=111&f=cap_largeover,sh_opt_option,sh_price_o10,sh_avgvol_o2000,geo_usa,ta_highlow52w_a2,ta_sma50_pa,ta_sma200_pa,ta_perf_4w10o"
-}
+def _clean_symbol(t: str) -> str:
+    return (
+        str(t).strip().upper()
+        .replace(" ", "")
+        .replace("/", "-")
+        .replace(".", "-")
+    )
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept-Language": "en-US,en;q=0.9",
-}
-S = requests.Session(); S.headers.update(HEADERS)
+def _read_html_table(url: str, match: str | None = None) -> pd.DataFrame:
+    ua = {"User-Agent": "Mozilla/5.0 (CI/Scanner)"}
+    for i in range(MAX_RETRIES):
+        try:
+            r = requests.get(url, headers=ua, timeout=20)
+            r.raise_for_status()
+            dfs = pd.read_html(r.text, match=match)
+            if dfs:
+                return dfs[0]
+        except Exception:
+            if i == MAX_RETRIES - 1:
+                raise
+            time.sleep(RETRY_SLEEP * (i + 1))
+    raise RuntimeError(f"Failed to read table: {url}")
 
-# -------------
-# Scraping helpers
-# -------------
+def load_universe_from_wiki() -> List[str]:
+    # S&P 500
+    sp = _read_html_table("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+    sp_col = "Symbol" if "Symbol" in sp.columns else sp.columns[0]
+    sp_syms = {_clean_symbol(x) for x in sp[sp_col].dropna().astype(str)}
 
-def extract_tickers(html: str) -> List[str]:
-    soup = BeautifulSoup(html, "html.parser")
-    out, seen = [], set()
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if "quote.ashx?t=" in href:
-            t = a.text.strip().upper()
-            if re.fullmatch(r"[A-Z.]{1,5}", t) and t not in seen:
-                seen.add(t); out.append(t)
-    return out
+    # Nasdaq-100
+    ndx = _read_html_table("https://en.wikipedia.org/wiki/Nasdaq-100", match="Ticker|Symbol")
+    ndx_col = "Ticker" if "Ticker" in ndx.columns else ("Symbol" if "Symbol" in ndx.columns else ndx.columns[0])
+    ndx_syms = {_clean_symbol(x) for x in ndx[ndx_col].dropna().astype(str)}
 
-def paged(url: str, page_index: int) -> str:
-    start = page_index * 20 + 1
-    sep = "&" if "?" in url else "?"
-    return f"{url}{sep}r={start}"
+    # Dow 30
+    dow = _read_html_table("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average", match="Symbol|Ticker")
+    if "Symbol" in dow.columns:
+        dcol = "Symbol"
+    elif "Ticker" in dow.columns:
+        dcol = "Ticker"
+    else:
+        dcol = dow.columns[0]
+    dow_syms = {_clean_symbol(x) for x in dow[dcol].dropna().astype(str)}
 
-def scrape_list(name: str, url: str, delay: float = 1.0, max_pages: int = 75) -> List[str]:
-    tickers, i = [], 0
-    while i < max_pages:
-        u = paged(url, i)
-        r = S.get(u, timeout=25)
-        if r.status_code != 200:
-            break
-        part = extract_tickers(r.text)
-        if i > 0 and not part:
-            break
-        for t in part:
-            if t not in tickers:
-                tickers.append(t)
-        i += 1
-        time.sleep(delay)
-        if len(part) < 20:
-            break
-    return tickers
+    syms = sorted(sp_syms | ndx_syms | dow_syms)
+    return syms
 
-def write_csv(path: str, rows):
-    with open(path, "w", newline="") as f:
-        w = csv.writer(f)
-        if rows and isinstance(rows[0], dict):
-            w.writerow(rows[0].keys())
-            for r in rows:
-                w.writerow([r[k] for k in rows[0].keys()])
+def load_watchlist_csv(path: pathlib.Path) -> List[str]:
+    df = pd.read_csv(path)
+    # find the ticker-like column
+    candidates = [c for c in df.columns if c.lower() == "ticker" or "ticker" in c.lower() or "symbol" in c.lower()]
+    if not candidates:
+        raise ValueError("No Ticker/Symbol column found in combined_watchlist.csv")
+    col = candidates[0]
+    syms = sorted({_clean_symbol(x) for x in df[col].dropna().astype(str) if str(x).strip()})
+    return syms
+
+def compute_rsi(close: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
+    delta = close.diff()
+    up = delta.clip(lower=0.0)
+    down = -delta.clip(upper=0.0)
+    roll_up = up.ewm(alpha=1/period, adjust=False).mean()
+    roll_down = down.ewm(alpha=1/period, adjust=False).mean()
+    rs = roll_up / roll_down
+    return 100 - (100 / (1 + rs))
+
+def compute_atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
+    # df columns: Open, High, Low, Close
+    high, low, close = df["High"], df["Low"], df["Close"]
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        (high - low),
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1)
+    return tr.rolling(period, min_periods=period).mean()
+
+def yf_download_batch(symbols: List[str]) -> pd.DataFrame:
+    tries = 0
+    last_err = None
+    size = CHUNK
+    while tries < MAX_RETRIES:
+        try:
+            data = yf.download(
+                symbols,
+                period="12mo",
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                group_by="ticker",
+                threads=True,
+            )
+            return data
+        except Exception as e:
+            last_err = e
+            tries += 1
+            time.sleep(RETRY_SLEEP * tries)
+    raise RuntimeError(f"yfinance batch failed: {last_err}")
+
+# -------------- Scan ---------------
+
+def scan_extremes(symbols: List[str]) -> tuple[pd.DataFrame, List[str]]:
+    rows: list[dict] = []
+    misses: list[str] = []
+
+    for i in range(0, len(symbols), CHUNK):
+        batch = symbols[i:i + CHUNK]
+        # Try bulk first
+        bulk_ok = True
+        try:
+            data = yf_download_batch(batch)
+        except Exception:
+            bulk_ok = False
+
+        if bulk_ok and isinstance(data.columns, pd.MultiIndex):
+            # multi-symbol frame
+            names = sorted({t for t, _ in data.columns})
+            for sym in names:
+                try:
+                    df = data[sym].dropna()
+                    if df.empty or len(df) < max(RSI_PERIOD, ATR_PERIOD) + 1:
+                        continue
+                    rsi = compute_rsi(df["Close"]).iloc[-1]
+                    if np.isnan(rsi):
+                        continue
+                    if rsi <= OVERSOLD or rsi >= OVERBOUGHT:
+                        side = "long" if rsi <= OVERSOLD else "short"
+                        atr = compute_atr(df).iloc[-1]
+                        ma50 = df["Close"].rolling(MA1, min_periods=MA1).mean().iloc[-1]
+                        ma200 = df["Close"].rolling(MA2, min_periods=MA2).mean().iloc[-1]
+                        rows.append({
+                            "Ticker": sym,
+                            "RSI14": round(float(rsi), 2),
+                            "Side": side,
+                            "Close": round(float(df["Close"].iloc[-1]), 2),
+                            "AsOf": ASOF,
+                            "ATR20": round(float(atr), 2) if pd.notna(atr) else np.nan,
+                            "MA50": round(float(ma50), 2) if pd.notna(ma50) else np.nan,
+                            "MA200": round(float(ma200), 2) if pd.notna(ma200) else np.nan,
+                        })
+                except Exception:
+                    misses.append(sym)
         else:
-            w.writerow(["Ticker"])
-            for t in rows:
-                w.writerow([t])
+            # per-ticker salvage
+            for sym in batch:
+                try:
+                    df = yf.download(sym, period="12mo", interval="1d", auto_adjust=False, progress=False)
+                    if df.empty or len(df) < max(RSI_PERIOD, ATR_PERIOD) + 1:
+                        continue
+                    rsi = compute_rsi(df["Close"]).iloc[-1]
+                    if np.isnan(rsi):
+                        continue
+                    if rsi <= OVERSOLD or rsi >= OVERBOUGHT:
+                        side = "long" if rsi <= OVERSOLD else "short"
+                        atr = compute_atr(df).iloc[-1]
+                        ma50 = df["Close"].rolling(MA1, min_periods=MA1).mean().iloc[-1]
+                        ma200 = df["Close"].rolling(MA2, min_periods=MA2).mean().iloc[-1]
+                        rows.append({
+                            "Ticker": sym,
+                            "RSI14": round(float(rsi), 2),
+                            "Side": side,
+                            "Close": round(float(df["Close"].iloc[-1]), 2),
+                            "AsOf": ASOF,
+                            "ATR20": round(float(atr), 2) if pd.notna(atr) else np.nan,
+                            "MA50": round(float(ma50), 2) if pd.notna(ma50) else np.nan,
+                            "MA200": round(float(ma200), 2) if pd.notna(ma200) else np.nan,
+                        })
+                except Exception:
+                    misses.append(sym)
 
-def write_txt(path: str, rows: List[dict]):
-    with open(path, "w") as f:
-        f.write("Ticker,List\n")
-        for r in rows:
-            f.write(f"{r['Ticker']},{r['List']}\n")
+    out = pd.DataFrame(rows, columns=["Ticker","RSI14","Side","Close","AsOf","ATR20","MA50","MA200"])
+    out = out.dropna(subset=["RSI14"]).sort_values(["Side","Ticker"]).reset_index(drop=True)
+    return out, sorted(set(misses))
 
-# -------------
-# Main
-# -------------
+# -------------- Main ---------------
 
 def main():
-    all_rows = []
-    order = ["oversold", "overbought", "pullbacks", "breakouts"]
+    # Resolve universe
+    wl = ROOT / "combined_watchlist.csv"
+    if wl.exists():
+        symbols = load_watchlist_csv(wl)
+    else:
+        symbols = load_universe_from_wiki()
 
-    for name in order:
-        url = SCREENS[name]
-        try:
-            print(f"Scraping {name}: {url}")
-            tickers = scrape_list(name, url)
-        except Exception as e:
-            print(f"[WARN] {name} failed: {e}")
-            tickers = []
-        write_csv(f"{name}.csv", tickers)
-        for t in tickers:
-            all_rows.append({"Ticker": t, "List": name})
+    # Full scan
+    df, misses = scan_extremes(symbols)
 
-    seen = set(); deduped = []
-    for r in all_rows:
-        if r["Ticker"] not in seen:
-            seen.add(r["Ticker"])
-            deduped.append(r)
+    # Outputs
+    df.to_csv(ROOT / "extremes.csv", index=False)
+    df["Ticker"].to_csv(ROOT / "extremes.txt", index=False, header=False)
 
-    write_csv("combined_watchlist.csv", deduped)
-    write_txt("combined_watchlist.txt", deduped)
+    # Misses file for auditing
+    pd.Series(misses, dtype=str).to_csv(ROOT / "missed_tickers.txt", index=False, header=False)
 
-    print(f"Done. Oversold:{len([r for r in deduped if r['List']=='oversold'])} | "
-          f"Overbought:{len([r for r in deduped if r['List']=='overbought'])} | "
-          f"Pullbacks:{len([r for r in deduped if r['List']=='pullbacks'])} | "
-          f"Breakouts:{len([r for r in deduped if r['List']=='breakouts'])}")
-    print(f"Combined (de-duped): {len(deduped)} tickers")
+    # Console summary
+    print(f"Watchlist count: {len(symbols)}")
+    print(f"Extremes found: {len(df)}")
+    print(f"Misses: {len(misses)}  -> missed_tickers.txt")
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
