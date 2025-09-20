@@ -1,112 +1,105 @@
 # scripts/fetch_data.py
-# Requires: yfinance, pandas, pytz
-import pandas as pd, yfinance as yf, pytz, time
+import pandas as pd, yfinance as yf, pytz, time, os
 from datetime import datetime, timedelta
 from pathlib import Path
 
 OUTPUT_DIR = Path("data")
-WATCHLIST = Path("combined_watchlist.csv")
+WATCHLIST = Path(os.getenv("WATCHLIST_PATH", "combined_watchlist.csv"))
 END = datetime.now(pytz.timezone("US/Eastern"))
-START = END - timedelta(days=160)  # ~4-5 months calendar to cover ~90 trading days
+START = END - timedelta(days=160)
 INTERVAL = "1d"
 MAX_RETRIES = 3
 SLEEP = 2.0
 CHUNK = 25
 
+# accept common variants
 GROUP_MAP = {
-    "oversold": "oversold",
-    "overbought": "overbought",
-    "breakouts": "breakouts",
-    "pullbacks": "breakouts",  # merge pullbacks into breakouts
+    "oversold":"oversold",
+    "overbought":"overbought",
+    "breakouts":"breakouts",
+    "breakout":"breakouts",
+    "pullbacks":"breakouts",
+    "pullback":"breakouts",
 }
 
 def read_watchlist():
     df = pd.read_csv(WATCHLIST)
     df.columns = [c.strip().capitalize() for c in df.columns]  # Ticker, List
-    df["List"] = df["List"].str.strip().str.lower()
-    df["Ticker"] = df["Ticker"].str.strip().str.upper()
+    df["List"] = df["List"].astype(str).str.strip().str.lower()
+    df["Ticker"] = df["Ticker"].astype(str).str.strip().upper()
+    print("List value counts:", df["List"].value_counts().to_dict())
     return df
 
 def buckets(df):
     out = {"oversold": set(), "overbought": set(), "breakouts": set()}
+    unknown = set()
     for _, r in df.iterrows():
-        kind = GROUP_MAP.get(r["List"])
-        if not kind:
-            continue
-        out[kind].add(r["Ticker"])
-    return {k: sorted(list(v)) for k, v in out.items()}
+        key = GROUP_MAP.get(r["List"])
+        if key: out[key].add(r["Ticker"])
+        else: unknown.add(r["List"])
+    if unknown: print("Unknown categories ignored:", sorted(unknown))
+    for k,v in out.items(): print(f"[bucket] {k}: {len(v)} tickers")
+    return {k: sorted(v) for k,v in out.items()}
 
 def dl(symbols):
     for a in range(1, MAX_RETRIES+1):
         try:
             return yf.download(
-                tickers=symbols,
-                start=START.strftime("%Y-%m-%d"),
+                tickers=symbols, start=START.strftime("%Y-%m-%d"),
                 end=(END+timedelta(days=1)).strftime("%Y-%m-%d"),
-                interval=INTERVAL,
-                auto_adjust=False,
-                group_by="ticker",
-                threads=True,
-                progress=False,
+                interval=INTERVAL, auto_adjust=False,
+                group_by="ticker", threads=True, progress=False
             )
         except Exception:
-            if a == MAX_RETRIES:
-                raise
+            if a == MAX_RETRIES: raise
             time.sleep(SLEEP)
 
 def to_long(df, syms, group):
-    recs=[]
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["Date","Ticker","Group","Open","High","Low","Close","Adj Close","Volume"])
+    cols=["Date","Ticker","Group","Open","High","Low","Close","Adj Close","Volume"]
+    rec=[]
+    if df is None or df.empty: return pd.DataFrame(columns=cols)
     for s in syms:
-        if s not in df.columns.get_level_values(0): 
-            continue
+        if s not in df.columns.get_level_values(0): continue
         sub=df[s].copy()
-        if sub.empty: 
-            continue
+        if sub.empty: continue
         sub=sub.reset_index()
-        sub["Ticker"]=s
-        sub["Group"]=group
-        sub=sub[["Date","Ticker","Group","Open","High","Low","Close","Adj Close","Volume"]]
-        recs.append(sub)
-    if not recs:
-        return pd.DataFrame(columns=["Date","Ticker","Group","Open","High","Low","Close","Adj Close","Volume"])
-    out=pd.concat(recs, ignore_index=True)
+        sub["Ticker"]=s; sub["Group"]=group
+        sub=sub[cols]
+        rec.append(sub)
+    if not rec: return pd.DataFrame(columns=cols)
+    out=pd.concat(rec, ignore_index=True)
     out["Date"]=pd.to_datetime(out["Date"], utc=True).dt.tz_convert("US/Eastern").dt.date
-    out=out.sort_values(["Ticker","Date"]).drop_duplicates(["Ticker","Date"])
-    return out
+    return out.sort_values(["Ticker","Date"]).drop_duplicates(["Ticker","Date"])
 
 def fetch_and_save(name, tickers):
     if not tickers:
-        print(f"[{name}] no tickers. skipped.")
+        print(f"[{name}] empty. skip.")
         return pd.DataFrame()
     parts=[]
-    for i in range(0, len(tickers), CHUNK):
+    for i in range(0,len(tickers),CHUNK):
         raw=dl(tickers[i:i+CHUNK])
         parts.append(to_long(raw, tickers[i:i+CHUNK], name))
     df=pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     df=df[pd.notnull(df["Close"])]
     df=df[df["Volume"]>=0]
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    outpath = OUTPUT_DIR / f"{name}.csv"
-    df.to_csv(outpath, index=False)
-    print(f"[{name}] saved {len(df)} rows to {outpath}")
+    path=OUTPUT_DIR/f"{name}.csv"
+    df.to_csv(path, index=False)
+    print(f"[{name}] rows: {len(df)} -> {path}")
     return df
 
 def main():
-    wl = read_watchlist()
-    b = buckets(wl)
-    all_frames=[]
+    wl=read_watchlist()
+    b=buckets(wl)
+    frames=[]
     for name, tickers in b.items():
-        df = fetch_and_save(name, tickers)
-        if not df.empty:
-            all_frames.append(df)
-    if all_frames:
-        combined = pd.concat(all_frames, ignore_index=True)
-        combined = combined.sort_values(["Group","Ticker","Date"])
-        outpath = OUTPUT_DIR / "combined.csv"
-        combined.to_csv(outpath, index=False)
-        print(f"[combined] saved {len(combined)} rows to {outpath}")
+        frames.append(fetch_and_save(name, tickers))
+    frames=[f for f in frames if not f.empty]
+    if frames:
+        combined=pd.concat(frames, ignore_index=True).sort_values(["Group","Ticker","Date"])
+        path=OUTPUT_DIR/"combined.csv"
+        combined.to_csv(path, index=False)
+        print(f"[combined] rows: {len(combined)} -> {path}")
 
 if __name__=="__main__":
     main()
