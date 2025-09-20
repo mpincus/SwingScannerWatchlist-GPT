@@ -2,6 +2,12 @@ name: Build Finviz Watchlist
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "15 20 * * 1-5"
+
+concurrency:
+  group: watchlist
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -20,10 +26,49 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt || pip install "numpy>=1.24" "pandas>=2.0" "yfinance>=0.2.40" requests lxml
 
+      - name: Sanitize + compile
+        run: |
+          python - <<'PY'
+import io,re
+p="finviz_watchlist_builder.py"
+s=io.open(p,encoding="utf-8",errors="ignore").read()
+# strip BOM/zero-width/bidi controls and replace smart chars
+s=re.sub(r'[\uFEFF\u200B-\u200F\u202A-\u202E\u2066-\u2069]','',s)
+s=(s.replace('≤','<=').replace('≥','>=')
+     .replace('–','-').replace('—','-')
+     .replace('“','"').replace('”','"').replace('’',"'"))
+if not s.endswith("\n"): s+="\n"
+io.open(p,"w",encoding="utf-8",newline="\n").write(s)
+PY
+          python -X utf8 -m py_compile finviz_watchlist_builder.py
+
       - name: Run scraper
         run: |
           mkdir -p docs
           python finviz_watchlist_builder.py
+
+      - name: Assert outputs
+        run: |
+          set -e
+          ls -la
+          test -f combined_watchlist.csv
+          test -f docs/combined_watchlist.txt
+          test -f extremes.csv
+          test -f extremes.txt
+          test -f missed_tickers.txt
+          head -n 5 combined_watchlist.csv || true
+
+      - name: Upload outputs (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: watchlist-outputs
+          if-no-files-found: warn
+          path: |
+            combined_watchlist.csv
+            docs/combined_watchlist.txt
+            extremes.csv
+            extremes.txt
+            missed_tickers.txt
 
       - name: Commit changes (if any)
         run: |
