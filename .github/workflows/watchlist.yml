@@ -25,14 +25,6 @@ jobs:
           mkdir -p docs
           python finviz_watchlist_builder.py
 
-      - name: Assert and show outputs
-        run: |
-          set -e
-          ls -la
-          test -f extremes.csv
-          test -f extremes.txt
-          head -n 5 extremes.csv || true
-
       - name: Commit changes (if any)
         run: |
           git config user.name "github-actions[bot]"
