@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 OUTPUT_DIR = Path("data")
-WATCHLIST = Path("watchlist.csv")
+WATCHLIST = Path("combined_watchlist.csv")
 END = datetime.now(pytz.timezone("US/Eastern"))
 START = END - timedelta(days=160)  # ~4-5 months calendar to cover ~90 trading days
 INTERVAL = "1d"
