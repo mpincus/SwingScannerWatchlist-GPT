@@ -1,5 +1,4 @@
-name: Build Quality Signals
-
+name: Build Quality From Combined
 on:
   workflow_dispatch:
 
@@ -7,50 +6,34 @@ permissions:
   contents: write
 
 jobs:
-  quality:
+  quality_from_combined:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install dependencies
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Verify inputs
-        run: |
-          test -f data/combined.csv || (echo "missing: data/combined.csv" && exit 1)
-          test -f data/signals.csv  || (echo "missing: data/signals.csv" && exit 1)
-
-      - name: Run quality scan
-        run: python scripts/quality_scan.py
-
+      - name: Verify combined
+        run: test -f data/combined.csv || (echo "missing data/combined.csv" && exit 1)
+      - name: Run quality gate
+        run: python scripts/quality_from_combined.py
       - name: Verify output
         run: |
-          test -f data/signals_quality.csv || (echo "missing: data/signals_quality.csv" && exit 1)
-          head -n 5 data/signals_quality.csv || true
-
+          test -f data/quality_today.csv || (echo "missing: data/quality_today.csv" && exit 1)
+          head -n 5 data/quality_today.csv || true
       - name: Copy to docs
         run: |
           mkdir -p docs
-          cp -vf data/signals_quality.csv docs/signals_quality.csv
+          cp -vf data/quality_today.csv docs/quality_today.csv
           ls -la docs
-
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Publish signals_quality.csv"
-          file_pattern: |
-            docs/signals_quality.csv
-            data/signals_quality.csv
-
-      - name: Upload artifact (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: signals-quality
-          path: data/signals_quality.csv
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/quality_today.csv data/quality_today.csv
+          git commit -m "Publish quality_today from combined" || echo "No changes"
+          git push
