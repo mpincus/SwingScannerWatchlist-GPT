@@ -1,7 +1,12 @@
 name: Copy CSVs to docs
 
 on:
-  workflow_dispatch:   # manual trigger only
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to copy from'
+        default: 'main'
+        required: true
 
 permissions:
   contents: write
@@ -10,31 +15,33 @@ jobs:
   copy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
 
       - name: Verify CSVs exist
         run: |
+          echo "Listing data/ contents:"
           ls -la data || true
-          test -f data/combined.csv || (echo "ERROR: combined.csv not found" && exit 1)
-          if [ -f data/signals.csv ]; then
-            echo "signals.csv exists"
-          else
-            echo "signals.csv not generated yet"
-          fi
+          echo
+          test -f data/combined.csv || (echo "ERROR: data/combined.csv not found" && exit 1)
+          test -f data/signals.csv  || (echo "ERROR: data/signals.csv not found" && exit 1)
+          echo "Head of signals.csv:"
+          head -n 5 data/signals.csv || true
 
       - name: Copy into docs
         run: |
           mkdir -p docs
           cp -v data/combined.csv docs/combined.csv
-          if [ -f data/signals.csv ]; then
-            cp -v data/signals.csv docs/signals.csv
-          fi
+          cp -v data/signals.csv  docs/signals.csv
+          echo "Listing docs/ contents after copy:"
           ls -la docs
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Copy CSVs into docs folder"
+          commit_message: "Copy combined.csv and signals.csv into docs"
           file_pattern: |
             docs/combined.csv
             docs/signals.csv
