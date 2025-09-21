@@ -1,7 +1,15 @@
-name: Manual Test
-on: { workflow_dispatch: {} }
-jobs:
-  debug:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Event=$GITHUB_EVENT_NAME Ref=$GITHUB_REF Sha=$GITHUB_SHA"
+- name: Prepare GitHub Pages files
+        run: |
+          mkdir -p docs
+          echo "Copying combined.csv..."
+          test -f data/combined.csv || (echo "ERROR: combined.csv not found" && exit 1)
+          cp -v data/combined.csv docs/combined.csv
+
+          if [ -f data/signals.csv ]; then
+            echo "Copying signals.csv..."
+            cp -v data/signals.csv docs/signals.csv
+          else
+            echo "No signals.csv generated this run."
+          fi
+
+          ls -la docs
