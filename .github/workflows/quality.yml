@@ -20,7 +20,7 @@ jobs:
       - name: Verify combined
         run: test -f data/combined.csv || (echo "missing data/combined.csv" && exit 1)
       - name: Run quality gate
-        run: python scripts/quality.py
+        run: python scripts/quality_scan.py
       - name: Verify output
         run: |
           test -f data/quality_today.csv || (echo "missing: data/quality_today.csv" && exit 1)
