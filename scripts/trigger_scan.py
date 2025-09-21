@@ -1,5 +1,4 @@
-# Generates data/signals.csv using RSI-up as the only trigger.
-# Signal: RSI(14)[t] > RSI(14)[t-1]  -> Side = long, Trigger = "RSI_UP"
+# Generates data/signals.csv using RSI-up and RSI-down triggers.
 # Inputs:  data/combined.csv  (must contain: Date,Ticker,Group,Open,High,Low,Close,Volume)
 # Output:  data/signals.csv   (columns kept compatible with prior workflow)
 
@@ -24,18 +23,25 @@ def main():
 
     # Compute RSI(14) per ticker
     df["RSI14"] = df.groupby("Ticker")["Close"].transform(rsi14)
-
-    # Prior-day RSI
     df["RSI14_prev"] = df.groupby("Ticker")["RSI14"].shift(1)
 
-    # Signal: RSI up today vs yesterday
-    sig = df[(df["RSI14"].notna()) & (df["RSI14_prev"].notna()) & (df["RSI14"] > df["RSI14_prev"])].copy()
+    signals = []
 
-    # Keep prior columns for compatibility; fill extras as needed
-    sig["Side"] = "long"
-    sig["Trigger"] = "RSI_UP"
+    # RSI Up -> long
+    sig_up = df[(df["RSI14"] > df["RSI14_prev"]) & df["RSI14"].notna() & df["RSI14_prev"].notna()].copy()
+    sig_up["Side"] = "long"
+    sig_up["Trigger"] = "RSI_UP"
+    signals.append(sig_up)
 
-    # Optional 3-day ref levels (not required by this signal; kept for schema compatibility)
+    # RSI Down -> short
+    sig_down = df[(df["RSI14"] < df["RSI14_prev"]) & df["RSI14"].notna() & df["RSI14_prev"].notna()].copy()
+    sig_down["Side"] = "short"
+    sig_down["Trigger"] = "RSI_DOWN"
+    signals.append(sig_down)
+
+    sig = pd.concat(signals, ignore_index=True)
+
+    # Optional ref levels for schema compatibility
     sig["H3"] = sig.groupby("Ticker")["High"].shift(1).rolling(3).max().reset_index(level=0, drop=True)
     sig["L3"] = sig.groupby("Ticker")["Low"].shift(1).rolling(3).min().reset_index(level=0, drop=True)
 
