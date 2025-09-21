@@ -1,75 +1,47 @@
-# scripts/trigger_scan.py
-# Requires: pandas, numpy
+# Generates data/signals.csv using RSI-up as the only trigger.
+# Signal: RSI(14)[t] > RSI(14)[t-1]  -> Side = long, Trigger = "RSI_UP"
+# Inputs:  data/combined.csv  (must contain: Date,Ticker,Group,Open,High,Low,Close,Volume)
+# Output:  data/signals.csv   (columns kept compatible with prior workflow)
+
 import pandas as pd
 from pathlib import Path
 
-DATA = Path("data/combined.csv")
-OUT  = Path("data/signals.csv")
+COMBINED = Path("data/combined.csv")
+OUT = Path("data/signals.csv")
 
 def rsi14(close: pd.Series) -> pd.Series:
     delta = close.diff()
-    up = delta.clip(lower=0.0)
-    down = -delta.clip(upper=0.0)
-    roll_up = up.ewm(alpha=1/14, adjust=False).mean()
-    roll_down = down.ewm(alpha=1/14, adjust=False).mean().replace(0, 1e-12)
-    rs = roll_up / roll_down
+    gain = delta.clip(lower=0.0)
+    loss = -delta.clip(upper=0.0)
+    avg_gain = gain.ewm(alpha=1/14, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/14, adjust=False).mean().replace(0, 1e-12)
+    rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-def compute_triggers(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.sort_values(["Ticker","Date"]).copy()
-    # RSI
+def main():
+    df = pd.read_csv(COMBINED, parse_dates=["Date"])
+    df = df.sort_values(["Ticker","Date"]).reset_index(drop=True)
+
+    # Compute RSI(14) per ticker
     df["RSI14"] = df.groupby("Ticker")["Close"].transform(rsi14)
 
-    # Prior 3-day levels (exclude today)
-    df["H3"] = df.groupby("Ticker")["High"].transform(lambda s: s.shift(1).rolling(3).max())
-    df["L3"] = df.groupby("Ticker")["Low" ].transform(lambda s: s.shift(1).rolling(3).min())
+    # Prior-day RSI
+    df["RSI14_prev"] = df.groupby("Ticker")["RSI14"].shift(1)
 
-    # Previous OHLC for engulfing
-    g = df.groupby("Ticker")
-    prev_o = g["Open"].shift(1)
-    prev_c = g["Close"].shift(1)
+    # Signal: RSI up today vs yesterday
+    sig = df[(df["RSI14"].notna()) & (df["RSI14_prev"].notna()) & (df["RSI14"] > df["RSI14_prev"])].copy()
 
-    bullish_engulf = (df["Close"]>df["Open"]) & (prev_c<prev_o) & (df["Close"]>=prev_o) & (df["Open"]<=prev_c)
-    bearish_engulf = (df["Close"]<df["Open"]) & (prev_c>prev_o) & (df["Close"]<=prev_o) & (df["Open"]>=prev_c)
+    # Keep prior columns for compatibility; fill extras as needed
+    sig["Side"] = "long"
+    sig["Trigger"] = "RSI_UP"
 
-    # Triggers
-    long_rsi_cross  = (df["Group"].eq("oversold"))   & (df["RSI14"].shift(1)<=30) & (df["RSI14"]>30)
-    short_rsi_cross = (df["Group"].eq("overbought")) & (df["RSI14"].shift(1)>=70) & (df["RSI14"]<70)
-
-    long_breakout   = df["Group"].eq("oversold")   & (df["Close"]>df["H3"])
-    short_breakdown = df["Group"].eq("overbought") & (df["Close"]<df["L3"])
-
-    long_candle  = df["Group"].eq("oversold")   & bullish_engulf
-    short_candle = df["Group"].eq("overbought") & bearish_engulf
-
-    # Build trigger labels
-    labels = []
-    for lr, lb, lc, sr, sd, sc in zip(long_rsi_cross, long_breakout, long_candle,
-                                      short_rsi_cross, short_breakdown, short_candle):
-        t = []
-        if lr: t.append("LONG_RSI_CROSS")
-        if lb: t.append("LONG_3DAY_BREAKOUT")
-        if lc: t.append("LONG_ENGULF")
-        if sr: t.append("SHORT_RSI_CROSS")
-        if sd: t.append("SHORT_3DAY_BREAKDOWN")
-        if sc: t.append("SHORT_ENGULF")
-        labels.append("|".join(t))
-    df["Trigger"] = labels
-
-    # Side
-    df["Side"] = ""
-    df.loc[df["Trigger"].str.contains("LONG_", na=False) & ~df["Trigger"].str.contains("SHORT_", na=False), "Side"] = "long"
-    df.loc[df["Trigger"].str.contains("SHORT_", na=False) & ~df["Trigger"].str.contains("LONG_", na=False), "Side"] = "short"
-    df.loc[(df["Trigger"].str.contains("LONG_", na=False)) & (df["Trigger"].str.contains("SHORT_", na=False)), "Side"] = "both"
+    # Optional 3-day ref levels (not required by this signal; kept for schema compatibility)
+    sig["H3"] = sig.groupby("Ticker")["High"].shift(1).rolling(3).max().reset_index(level=0, drop=True)
+    sig["L3"] = sig.groupby("Ticker")["Low"].shift(1).rolling(3).min().reset_index(level=0, drop=True)
 
     cols = ["Date","Ticker","Group","Side","Trigger","Open","High","Low","Close","RSI14","H3","L3"]
-    sig = df.loc[df["Trigger"]!="", cols].copy()
-    sig["Date"] = pd.to_datetime(sig["Date"]).dt.date
-    return sig.sort_values(["Date","Ticker"])
+    sig = sig[cols].sort_values(["Date","Ticker"]).reset_index(drop=True)
 
-def main():
-    df = pd.read_csv(DATA, parse_dates=["Date"])
-    sig = compute_triggers(df)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     sig.to_csv(OUT, index=False)
     print(f"signals: {len(sig)} rows -> {OUT}")
