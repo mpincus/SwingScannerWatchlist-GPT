@@ -31,16 +31,19 @@ jobs:
         run: |
           ls -la data || true
           test -f data/combined.csv || (echo "ERROR: data/combined.csv missing" && exit 1)
-          head -n 5 data/combined.csv || true
 
       - name: Run trigger scanner
         run: python scripts/trigger_scan.py
 
-      - name: Prepare GitHub Pages files
+      - name: Copy CSVs into docs (for GitHub Pages)
         run: |
           mkdir -p docs
-          cp -f data/combined.csv docs/combined.csv
-          if [ -f data/signals.csv ]; then cp -f data/signals.csv docs/signals.csv; fi
+          cp -vf data/combined.csv docs/combined.csv
+          if [ -f data/signals.csv ]; then
+            cp -vf data/signals.csv docs/signals.csv
+          else
+            echo "No signals.csv this run"
+          fi
           ls -la docs
 
       - name: Commit changes
@@ -51,9 +54,3 @@ jobs:
             data/*.csv
             docs/combined.csv
             docs/signals.csv
-
-      - name: Upload combined.csv artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined-csv
-          path: data/combined.csv
