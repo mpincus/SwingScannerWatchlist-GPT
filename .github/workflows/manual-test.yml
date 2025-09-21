@@ -15,33 +15,52 @@ jobs:
   copy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch }}
 
-      - name: Verify CSVs exist
+      - name: Diagnose repo state
         run: |
-          echo "Listing data/ contents:"
+          set -euo pipefail
+          echo "Commit: $(git rev-parse --short HEAD)"
+          echo "Top-level:"
+          ls -la
+          echo "data/:"
           ls -la data || true
-          echo
+          echo "docs/:"
+          ls -la docs || true
+
+      - name: Verify required files exist
+        run: |
+          set -euo pipefail
           test -f data/combined.csv || (echo "ERROR: data/combined.csv not found" && exit 1)
           test -f data/signals.csv  || (echo "ERROR: data/signals.csv not found" && exit 1)
-          echo "Head of signals.csv:"
+          echo "Sizes:"
+          wc -c data/combined.csv data/signals.csv
+          echo "Head signals:"
           head -n 5 data/signals.csv || true
 
-      - name: Copy into docs
+      - name: Copy into docs with logging
         run: |
+          set -euo pipefail
           mkdir -p docs
-          cp -v data/combined.csv docs/combined.csv
-          cp -v data/signals.csv  docs/signals.csv
-          echo "Listing docs/ contents after copy:"
+          cp -vf data/combined.csv docs/combined.csv
+          cp -vf data/signals.csv  docs/signals.csv
+          echo "docs/ after copy:"
           ls -la docs
 
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Copy combined.csv and signals.csv into docs"
-          file_pattern: |
-            docs/combined.csv
-            docs/signals.csv
+      - name: Git add and commit (force include)
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs/combined.csv docs/signals.csv
+          git status --porcelain
+          # Commit even if unchanged (no-op commit ensures Pages updates)
+          git commit -m "Copy CSVs to docs (manual)" || echo "No changes to commit"
+
+      - name: Push
+        run: |
+          set -euo pipefail
+          git push
