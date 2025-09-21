@@ -1,87 +1,84 @@
-# scripts/quality_scan.py
+# Build data/quality_today.csv directly from data/combined.csv
+# Gates (same as before):
+#   Longs: Group==oversold AND RSI<=30 AND bullish engulfing AND R/R ≥ 1.25 (stop = prior 3-day low)
+#   Shorts: Group==overbought AND RSI>=70 AND bearish engulfing AND R/R ≥ 1.25 (stop = prior 3-day high)
 
 from pathlib import Path
 import pandas as pd
-import numpy as np
 
 COMBINED = Path("data/combined.csv")
-SIGNALS  = Path("data/signals.csv")
-OUT      = Path("data/signals_quality.csv")
+OUT = Path("data/quality_today.csv")
 
-def rsi14(close: pd.Series) -> pd.Series:
-    d = close.diff()
-    gain = d.clip(lower=0.0)
-    loss = -d.clip(upper=0.0)
-    avg_gain = gain.ewm(alpha=1/14, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/14, adjust=False).mean().replace(0, 1e-12)
-    rs = avg_gain / avg_loss
+def rsi14(s: pd.Series) -> pd.Series:
+    d = s.diff()
+    gain = d.clip(lower=0)
+    loss = -d.clip(upper=0)
+    ag = gain.ewm(alpha=1/14, adjust=False).mean()
+    al = loss.ewm(alpha=1/14, adjust=False).mean().replace(0, 1e-12)
+    rs = ag / al
     return 100 - (100 / (1 + rs))
 
-def main():
-    # Load OHLC and compute RSI
-    df = pd.read_csv(COMBINED, parse_dates=["Date"]).sort_values(["Ticker","Date"])
-    df["RSI14"] = df.groupby("Ticker")["Close"].transform(rsi14)
+def grade(rr):
+    if rr >= 1.75: return "A+"
+    if rr >= 1.50: return "A"
+    if rr >= 1.25: return "B+"
+    return "REJECT"
 
-    # Previous candle + prior 3-day high/low
+def main():
+    df = pd.read_csv(COMBINED, parse_dates=["Date"]).sort_values(["Ticker","Date"]).reset_index(drop=True)
+
+    # Compute context
+    df["RSI14"] = df.groupby("Ticker")["Close"].transform(rsi14)
     g = df.groupby("Ticker", group_keys=False)
     df["PrevOpen"]  = g["Open"].shift(1)
     df["PrevClose"] = g["Close"].shift(1)
     df["H3"] = g["High"].shift(1).rolling(3).max()
     df["L3"] = g["Low"].shift(1).rolling(3).min()
 
-    # Load signals
-    sig = pd.read_csv(SIGNALS, parse_dates=["Date"])
+    # Use latest date available
+    last_date = df["Date"].max()
+    today = df[df["Date"] == last_date].dropna(subset=["PrevOpen","PrevClose","H3","L3","RSI14"]).copy()
 
-    # Merge signals with context
-    ctx_cols = ["Date","Ticker","Group","Open","High","Low","Close","RSI14","PrevOpen","PrevClose","H3","L3"]
-    m = pd.merge(sig, df[ctx_cols], on=["Date","Ticker","Group"], how="left")
+    # Engulfing
+    bull = (today["Close"] > today["Open"]) & (today["PrevClose"] < today["PrevOpen"]) & \
+           (today["Close"] >= today["PrevOpen"]) & (today["Open"] <= today["PrevClose"])
+    bear = (today["Close"] < today["Open"]) & (today["PrevClose"] > today["PrevOpen"]) & \
+           (today["Close"] <= today["PrevOpen"]) & (today["Open"] >= today["PrevClose"])
 
-    # Drop missing data
-    m = m.dropna(subset=["Open","Close","RSI14","PrevOpen","PrevClose","H3","L3"])
+    # Longs from oversold
+    longs = today[(today["Group"] == "oversold") & (today["RSI14"] <= 30) & bull].copy()
+    longs["Stop"]   = longs["L3"]
+    longs["Risk"]   = (longs["Close"] - longs["Stop"]).clip(lower=1e-6)
+    longs["Target"] = longs["Close"] + 1.25 * longs["Risk"]
+    longs["R_R"]    = 1.25
+    longs["Side"]   = "long"
+    longs["Trigger"]= "QUALITY_REVERSAL"
 
-    # Engulfing checks
-    bull = (m["Close"] > m["Open"]) & (m["PrevClose"] < m["PrevOpen"]) & (m["Close"] >= m["PrevOpen"]) & (m["Open"] <= m["PrevClose"])
-    bear = (m["Close"] < m["Open"]) & (m["PrevClose"] > m["PrevOpen"]) & (m["Close"] <= m["PrevOpen"]) & (m["Open"] >= m["PrevClose"])
+    # Shorts from overbought
+    shorts = today[(today["Group"] == "overbought") & (today["RSI14"] >= 70) & bear].copy()
+    shorts["Stop"]   = shorts["H3"]
+    shorts["Risk"]   = (shorts["Stop"] - shorts["Close"]).clip(lower=1e-6)
+    shorts["Target"] = shorts["Close"] - 1.25 * shorts["Risk"]
+    shorts["R_R"]    = 1.25
+    shorts["Side"]   = "short"
+    shorts["Trigger"]= "QUALITY_REVERSAL"
 
-    # RSI gates
-    rsi_long_ok  = m["RSI14"] <= 30
-    rsi_short_ok = m["RSI14"] >= 70
-
-    # Risk/Reward
-    risk_long  = m["Close"] - m["L3"]
-    risk_short = m["H3"] - m["Close"]
-
-    rr_long  = (1.25 * risk_long)  / risk_long
-    rr_short = (1.25 * risk_short) / risk_short
-    rr_long  = rr_long.where(risk_long > 0)
-    rr_short = rr_short.where(risk_short > 0)
-
-    # Masks
-    long_mask  = (m["Side"]=="long")  & rsi_long_ok  & bull & (rr_long  >= 1.25)
-    short_mask = (m["Side"]=="short") & rsi_short_ok & bear & (rr_short >= 1.25)
-
-    passed = m[long_mask | short_mask].copy()
-
-    if passed.empty:
+    out = pd.concat([longs, shorts], ignore_index=True)
+    if out.empty:
         OUT.parent.mkdir(parents=True, exist_ok=True)
-        passed.to_csv(OUT, index=False)
-        print("0 quality signals -> data/signals_quality.csv")
+        out.to_csv(OUT, index=False)
+        print(f"0 quality setups for {last_date.date()} -> {OUT}")
         return
 
-    # Stops / targets
-    passed.loc[long_mask,  "Stop"]   = passed.loc[long_mask,  "L3"]
-    passed.loc[long_mask,  "Target"] = passed.loc[long_mask,  "Close"] + 1.25 * (passed.loc[long_mask,  "Close"] - passed.loc[long_mask,  "L3"])
-    passed.loc[short_mask, "Stop"]   = passed.loc[short_mask, "H3"]
-    passed.loc[short_mask, "Target"] = passed.loc[short_mask, "Close"] - 1.25 * (passed.loc[short_mask, "H3"] - passed.loc[short_mask, "Close"])
+    out["Grade"] = out["R_R"].apply(grade)
+    out = out[out["Grade"].isin(["A+","A","B+"])]
 
-    passed["R_R"] = 1.25
-
-    out_cols = ["Date","Ticker","Group","Side","Trigger","Open","High","Low","Close","RSI14","H3","L3","Stop","Target","R_R"]
-    passed = passed[out_cols].sort_values(["Date","Ticker"]).reset_index(drop=True)
-
+    cols = ["Date","Ticker","Group","Side","Trigger","Open","High","Low","Close",
+            "RSI14","H3","L3","Stop","Target","R_R","Grade"]
+    out = out[cols].sort_values(["Side","Grade","Ticker"])
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    passed.to_csv(OUT, index=False)
-    print(f"{len(passed)} quality signals -> {OUT}")
+    out.to_csv(OUT, index=False)
+    print(f"{len(out)} quality setups for {last_date.date()} -> {OUT}")
 
 if __name__ == "__main__":
     main()
