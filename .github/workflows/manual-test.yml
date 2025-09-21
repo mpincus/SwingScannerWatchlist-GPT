@@ -1,15 +1,40 @@
-- name: Prepare GitHub Pages files
-        run: |
-          mkdir -p docs
-          echo "Copying combined.csv..."
-          test -f data/combined.csv || (echo "ERROR: combined.csv not found" && exit 1)
-          cp -v data/combined.csv docs/combined.csv
+name: Copy CSVs to docs
 
+on:
+  workflow_dispatch:   # manual trigger only
+
+permissions:
+  contents: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify CSVs exist
+        run: |
+          ls -la data || true
+          test -f data/combined.csv || (echo "ERROR: combined.csv not found" && exit 1)
           if [ -f data/signals.csv ]; then
-            echo "Copying signals.csv..."
-            cp -v data/signals.csv docs/signals.csv
+            echo "signals.csv exists"
           else
-            echo "No signals.csv generated this run."
+            echo "signals.csv not generated yet"
           fi
 
+      - name: Copy into docs
+        run: |
+          mkdir -p docs
+          cp -v data/combined.csv docs/combined.csv
+          if [ -f data/signals.csv ]; then
+            cp -v data/signals.csv docs/signals.csv
+          fi
           ls -la docs
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Copy CSVs into docs folder"
+          file_pattern: |
+            docs/combined.csv
+            docs/signals.csv
