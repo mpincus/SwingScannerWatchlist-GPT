@@ -2,8 +2,7 @@ name: Fetch OHLCV Data
 
 on:
   schedule:
-    # 22:30 UTC ≈ 6:30pm ET, Mon–Fri
-    - cron: "30 22 * * 1-5"
+    - cron: "30 22 * * 1-5"   # 6:30pm ET, Mon–Fri
   workflow_dispatch:
 
 permissions:
@@ -25,27 +24,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generate CSVs
+      - name: Generate OHLCV CSVs
         run: python scripts/fetch_data.py
 
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Update OHLCV data CSVs"
-          file_pattern: data/*.csv
+      - name: Verify combined.csv exists
+        run: |
+          ls -la data || true
+          test -f data/combined.csv || (echo "ERROR: data/combined.csv missing" && exit 1)
+          head -n 5 data/combined.csv || true
 
-      - name: Copy combined.csv into docs for GitHub Pages
+      - name: Run trigger scanner
+        run: python scripts/trigger_scan.py
+
+      - name: Prepare GitHub Pages files
         run: |
           mkdir -p docs
-          cp data/combined.csv docs/combined.csv
+          cp -f data/combined.csv docs/combined.csv
+          if [ -f data/signals.csv ]; then cp -f data/signals.csv docs/signals.csv; fi
+          ls -la docs
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update OHLCV data CSVs"
+          commit_message: "Update OHLCV data and signals"
           file_pattern: |
             data/*.csv
             docs/combined.csv
+            docs/signals.csv
 
       - name: Upload combined.csv artifact
         uses: actions/upload-artifact@v4
