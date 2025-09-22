@@ -1,5 +1,8 @@
 name: Build Quality From Combined
 on:
+  schedule:
+    # Weekdays at 21:15 UTC (after US market close). Adjust if you like.
+    - cron: '25 21 * * 1-5'
   workflow_dispatch:
 
 permissions:
