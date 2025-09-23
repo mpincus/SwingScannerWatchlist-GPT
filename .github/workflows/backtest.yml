@@ -1,18 +1,18 @@
 name: Backtest Quality Trades
 
 on:
-  workflow_dispatch:   # lets you run it manually from GitHub
+  workflow_dispatch:   # manual run
   schedule:
-    - cron: "0 22 * * 1-5"   # runs 5 days/week at 10PM UTC (adjust to your timezone)
+    - cron: "0 22 * * 1-5"   # 10PM UTC on weekdays
 
 jobs:
   backtest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
@@ -23,7 +23,7 @@ jobs:
         run: python scripts/backtest_quality.py
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4   # <-- updated to v4
         with:
           name: backtest-results
           path: |
