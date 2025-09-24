@@ -1,12 +1,12 @@
 name: Backtest Quality Trades
 
 on:
-  workflow_dispatch:        # manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "0 22 * * 1-5"  # weekdays 10:00 PM UTC
+    - cron: "0 22 * * 1-5"   # 10:00 PM UTC, weekdays
 
 permissions:
-  contents: write           # allow push back to repo
+  contents: write
 
 jobs:
   backtest:
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0            # needed for pull/rebase later
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,18 +27,19 @@ jobs:
 
       - name: Sanity check inputs
         run: |
-          pwd
+          pwd && git rev-parse --abbrev-ref HEAD
           ls -la
           ls -la data || echo "NO data dir"
           test -f data/combined.csv && echo "FOUND data/combined.csv" || (echo "MISSING data/combined.csv" && exit 1)
 
       - name: Run backtest
         run: |
+          set -e
           python -u scripts/backtest_quality.py
           echo "--- AFTER RUN ---"
           ls -la data || true
-          test -f data/quality_trades.csv || (echo "missing quality_trades.csv" && exit 1)
-          test -f data/quality_stats.csv  || (echo "missing quality_stats.csv" && exit 1)
+          head -n 5 data/quality_trades.csv || (echo "quality_trades.csv missing"; exit 1)
+          head -n 5 data/quality_stats.csv  || (echo "quality_stats.csv missing";  exit 1)
 
       - name: Save results into docs
         run: |
@@ -53,6 +54,6 @@ jobs:
           git fetch origin main
           git checkout main
           git pull --rebase origin main
-          git add docs/quality_trades.csv docs/quality_stats.csv
+          git add data/quality_trades.csv data/quality_stats.csv docs/quality_trades.csv docs/quality_stats.csv
           git commit -m "Update backtest results [skip ci]" || echo "No changes to commit"
           git push origin main
