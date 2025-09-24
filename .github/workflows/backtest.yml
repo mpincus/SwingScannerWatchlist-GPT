@@ -1,17 +1,21 @@
 name: Backtest Quality Trades
 
 on:
-  workflow_dispatch:   # manual trigger
+  workflow_dispatch:        # manual trigger
   schedule:
-    - cron: "0 22 * * 1-5"   # run weekdays at 10PM UTC
+    - cron: "0 22 * * 1-5"  # weekdays 10:00 PM UTC
+
+permissions:
+  contents: write           # allow push back to repo
 
 jobs:
   backtest:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # needed for pull/rebase later
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -42,10 +46,14 @@ jobs:
           cp data/quality_trades.csv docs/
           cp data/quality_stats.csv docs/
 
-      - name: Commit results
+      - name: Commit results (rebase-safe)
         run: |
-          git config --global user.name "github-actions[bot]"
+          git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main
           git add docs/quality_trades.csv docs/quality_stats.csv
           git commit -m "Update backtest results [skip ci]" || echo "No changes to commit"
-          git push
+          git push origin main
+```0
