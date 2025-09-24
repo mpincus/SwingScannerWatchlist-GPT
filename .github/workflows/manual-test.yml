@@ -1,6 +1,10 @@
 name: Copy CSVs to docs
 
 on:
+  schedule:
+    # Weekdays at 21:15 UTC (after US market close). Adjust if you like.
+    - cron: '40 21 * * 1-5'
+ 
   workflow_dispatch:
     inputs:
       branch:
