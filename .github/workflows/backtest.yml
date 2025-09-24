@@ -12,7 +12,7 @@ jobs:
   backtest:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -47,13 +47,10 @@ jobs:
           cp data/quality_trades.csv docs/
           cp data/quality_stats.csv docs/
 
-      - name: Commit results (rebase-safe)
+      - name: Commit results (safe)
         run: |
-          git config --global user.name  "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
-          git pull --rebase origin main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/quality_trades.csv data/quality_stats.csv docs/quality_trades.csv docs/quality_stats.csv
           git commit -m "Update backtest results [skip ci]" || echo "No changes to commit"
-          git push origin main
+          git push origin HEAD:main
