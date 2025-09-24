@@ -1,15 +1,17 @@
 name: Backtest Quality Trades
 
 on:
-  workflow_dispatch:   # manual run
+  workflow_dispatch:   # manual trigger
   schedule:
-    - cron: "0 22 * * 1-5"   # 10PM UTC on weekdays
+    - cron: "0 22 * * 1-5"   # run weekdays at 10PM UTC
 
 jobs:
   backtest:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -19,13 +21,31 @@ jobs:
       - name: Install dependencies
         run: pip install pandas numpy
 
-      - name: Run backtest
-        run: python scripts/backtest_quality.py
+      - name: Sanity check inputs
+        run: |
+          pwd
+          ls -la
+          ls -la data || echo "NO data dir"
+          test -f data/combined.csv && echo "FOUND data/combined.csv" || (echo "MISSING data/combined.csv" && exit 1)
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4   # <-- updated to v4
-        with:
-          name: backtest-results
-          path: |
-            data/quality_trades.csv
-            data/quality_stats.csv
+      - name: Run backtest
+        run: |
+          python -u scripts/backtest_quality.py
+          echo "--- AFTER RUN ---"
+          ls -la data || true
+          test -f data/quality_trades.csv || (echo "missing quality_trades.csv" && exit 1)
+          test -f data/quality_stats.csv  || (echo "missing quality_stats.csv" && exit 1)
+
+      - name: Save results into docs
+        run: |
+          mkdir -p docs
+          cp data/quality_trades.csv docs/
+          cp data/quality_stats.csv docs/
+
+      - name: Commit results
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/quality_trades.csv docs/quality_stats.csv
+          git commit -m "Update backtest results [skip ci]" || echo "No changes to commit"
+          git push
