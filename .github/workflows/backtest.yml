@@ -56,4 +56,3 @@ jobs:
           git add docs/quality_trades.csv docs/quality_stats.csv
           git commit -m "Update backtest results [skip ci]" || echo "No changes to commit"
           git push origin main
-```0
