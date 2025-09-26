@@ -1,9 +1,11 @@
 Ticker,List
 AAL,oversold
 USA,oversold
+ACAD,oversold
 ACI,oversold
 ALK,oversold
 ARCC,oversold
+ARES,oversold
 BROS,oversold
 BXSL,oversold
 CARR,oversold
@@ -16,8 +18,8 @@ FLY,oversold
 FOUR,oversold
 FSK,oversold
 HESM,oversold
+KD,oversold
 KDP,oversold
-KMB,oversold
 KMX,oversold
 KVUE,oversold
 NKE,oversold
@@ -29,21 +31,18 @@ SHAK,oversold
 SMPL,oversold
 SPGI,oversold
 STZ,oversold
-TOST,oversold
 TW,oversold
 WHR,oversold
 WSC,oversold
-XRAY,oversold
-AAPL,overbought
 ACMR,overbought
 ALHC,overbought
 AM,overbought
 AMAT,overbought
 APP,overbought
+ARWR,overbought
 AVAV,overbought
 BKR,overbought
 BTU,overbought
-C,overbought
 CDE,overbought
 GOLD,overbought
 CENX,overbought
@@ -52,6 +51,7 @@ CORT,overbought
 CRK,overbought
 CRNX,overbought
 CVI,overbought
+DOCS,overbought
 EA,overbought
 EBC,overbought
 EOSE,overbought
@@ -79,7 +79,6 @@ MIAX,overbought
 MLYS,overbought
 MPC,overbought
 MRVL,overbought
-MS,overbought
 MTSR,overbought
 MUR,overbought
 NEM,overbought
@@ -89,7 +88,6 @@ PPTA,overbought
 QBTS,overbought
 REZI,overbought
 RGTI,overbought
-SCCO,overbought
 SHOO,overbought
 SNDK,overbought
 SSRM,overbought
@@ -104,11 +102,11 @@ WBD,overbought
 WDC,overbought
 WMB,overbought
 XEL,overbought
+AAPL,breakouts
 ALAB,breakouts
 APH,breakouts
 AVGO,breakouts
 BE,breakouts
-BMNR,breakouts
 COHR,breakouts
 CPNG,breakouts
 CRWD,breakouts
@@ -123,7 +121,6 @@ GOOG,breakouts
 GOOGL,breakouts
 HIMS,breakouts
 HOOD,breakouts
-HWM,breakouts
 IONQ,breakouts
 JOBY,breakouts
 LITE,breakouts
@@ -135,6 +132,7 @@ ORCL,breakouts
 PLTR,breakouts
 PSKY,breakouts
 PSTG,breakouts
+RBLX,breakouts
 RDDT,breakouts
 RIVN,breakouts
 SATS,breakouts
