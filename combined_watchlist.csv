@@ -1,6 +1,8 @@
 Ticker,List
-ANET,oversold
+ACM,oversold
+AECOM,oversold
 USA,oversold
+ANET,oversold
 ARE,oversold
 AVAV,oversold
 BA,oversold
@@ -36,9 +38,11 @@ LEGN,oversold
 LRN,oversold
 LYV,oversold
 MARA,oversold
+MCHP,oversold
 META,oversold
 MOS,oversold
 MSFT,oversold
+MSI,oversold
 MSTR,oversold
 NTNX,oversold
 OKTA,oversold
