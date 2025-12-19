@@ -1,2 +1,1 @@
-Date,Ticker,Group,Side,Pattern,Open,High,Low,Close,RSI14,H3,L3,Stop,Target,R_R,WinRate10,Samples10,Grade
-2025-12-17,VERA,overbought,short,OverboughtShortRev,48.83000183105469,50.25,47.22010040283203,47.68999862670898,74.04599485515787,51.18999862670898,47.63199996948242,51.18999862670898,43.31499862670898,1.25,0.1660358282911979,60.0,
+Date,Ticker,Group,Open,High,Low,Close,Adj Close,Volume,RSI14,PrevOpen,PrevClose,H3,L3,Close_fut10,Pattern
