@@ -1,1 +1,2 @@
-Date,Ticker,Group,Open,High,Low,Close,Adj Close,Volume,RSI14,PrevOpen,PrevClose,H3,L3,Close_fut10,Pattern
+Date,Ticker,Group,Side,Pattern,Open,High,Low,Close,RSI14,H3,L3,Stop,Target,R_R,WinRate10,Samples10,Grade
+2026-03-15,SOC,overbought,short,OverboughtShortRev,18.06999969482422,18.3799991607666,15.960000038146973,16.1299991607666,71.3595868344945,19.25,14.260000228881836,19.25,12.229998111724854,1.25,0.2036012627994219,32.0,
